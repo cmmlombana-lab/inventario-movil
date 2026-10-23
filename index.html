@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Inventario">
+<meta name="theme-color" content="#245b78"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+</head><body>
+<title>Inventario en campo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<script src="jsQR.js"></script>
+<style>
+/* Herramienta de campo: una columna, controles grandes para el pulgar, barra inferior fija; el código del bien se muestra como su placa física. */
+:root{
+  --bg:#edf1f3;--card:#ffffff;--field:#f6f8f9;--ink:#15232b;--mu:#596a74;--line:#d3dce1;
+  --ac:#245b78;--ac-soft:#e3edf3;--on-ac:#ffffff;--tag:#e1a62c;--tag-ink:#2a1f05;
+  --ok:#2c7a4c;--ok-soft:#e5f2ea;--wa:#9a5e0a;--wa-soft:#fbf1df;--bad:#b23a2e;--bad-soft:#fbeceb;
+  --f-disp:"Barlow Condensed","Arial Narrow","Roboto Condensed",sans-serif;
+  --f-body:"Barlow","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --nav-h:64px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f161a;--card:#172127;--field:#121b20;--ink:#e3eaee;--mu:#93a4ad;--line:#29373f;
+  --ac:#6fa8c9;--ac-soft:#1a2a35;--on-ac:#0b1820;--tag:#e9b445;--tag-ink:#231904;
+  --ok:#6cc08f;--ok-soft:#162a1f;--wa:#e5ad55;--wa-soft:#2c2213;--bad:#ef8577;--bad-soft:#321e1c;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f161a;--card:#172127;--field:#121b20;--ink:#e3eaee;--mu:#93a4ad;--line:#29373f;
+  --ac:#6fa8c9;--ac-soft:#1a2a35;--on-ac:#0b1820;--tag:#e9b445;--tag-ink:#231904;
+  --ok:#6cc08f;--ok-soft:#162a1f;--wa:#e5ad55;--wa-soft:#2c2213;--bad:#ef8577;--bad-soft:#321e1c;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--f-body);-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--card)}
+.wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--card);border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;gap:12px;padding-block:10px}
+.mark{flex:none;width:34px;height:34px;border-radius:8px;background:var(--ac);display:grid;place-items:center}
+.mark svg{width:20px;height:20px;fill:var(--on-ac)}
+.ttl{min-width:0;flex:1}
+.ttl b{display:block;font:600 19px/1.1 var(--f-disp);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl span{display:block;font-size:13px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pend{flex:none;font:600 14px var(--f-disp);letter-spacing:.03em;padding:4px 10px;border-radius:99px;background:var(--tag);color:var(--tag-ink)}
+.pend[data-n="0"]{background:var(--ac-soft);color:var(--ac)}
+main{padding-block:14px calc(var(--nav-h) + 28px + env(safe-area-inset-bottom,0px))}
+.view{display:grid;gap:14px}
+h2{font:600 24px/1.15 var(--f-disp);margin:0;text-wrap:balance}
+h3{font:600 18px/1.2 var(--f-disp);margin:0;letter-spacing:.01em}
+p{margin:0}
+.mu{color:var(--mu)}.sm{font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;min-width:0}
+.note{border-radius:12px;padding:12px 14px;font-size:14.5px;display:grid;gap:6px}
+.note.wa{background:var(--wa-soft);color:var(--wa)}.note.ok{background:var(--ok-soft);color:var(--ok)}.note.info{background:var(--ac-soft);color:var(--ink)}
+.note b{font-weight:600}
+label.lb{display:block;font-size:13px;font-weight:500;color:var(--mu);margin-bottom:4px;letter-spacing:.01em}
+input,select,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:46px}
+textarea{resize:vertical;min-height:72px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 22%,transparent)}
+:focus-visible{outline:3px solid var(--tag);outline-offset:2px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.g2>*{min-width:0}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:380px){.g2{grid-template-columns:1fr}}
+button,.btn{font:600 16px var(--f-body);border:1px solid transparent;border-radius:12px;min-height:48px;padding:10px 16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center;-webkit-tap-highlight-color:transparent}
+.b-pri{background:var(--ac);color:var(--on-ac)}
+.b-ok{background:var(--ok);color:var(--on-ac)}
+.b-sec{background:var(--card);color:var(--ink);border-color:var(--line)}
+.b-dng{background:var(--card);color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.b-big{min-height:58px;font-size:18px;width:100%}
+.full{width:100%}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1 1 auto}
+/* placa del bien: el mismo formato de la etiqueta pegada en el activo */
+.placa{display:inline-flex;align-items:center;gap:6px;font:700 17px/1 var(--f-disp);letter-spacing:.04em;font-variant-numeric:tabular-nums;padding:5px 9px 5px 7px;border-radius:6px;background:var(--tag);color:var(--tag-ink);white-space:nowrap}
+.placa svg{width:14px;height:14px;fill:currentColor}
+.placa.nuevo{background:var(--ac-soft);color:var(--ac)}
+.list{display:grid;border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+.it{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);background:none;border-left:0;border-right:0;border-top:0;border-radius:0;text-align:left;color:inherit;font:inherit;min-height:64px;width:100%}
+.it:last-child{border-bottom:0}
+.it .th{width:44px;height:44px;border-radius:8px;object-fit:cover;background:var(--field);border:1px solid var(--line);display:grid;place-items:center;color:var(--mu);font:600 12px var(--f-disp)}
+.it .tx{min-width:0;display:grid;gap:2px}
+.it .tx b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it .tx span{font-size:13.5px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{font:600 13px var(--f-disp);letter-spacing:.03em;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.st.v{background:var(--ok-soft);color:var(--ok)}.st.c{background:var(--wa-soft);color:var(--wa)}.st.p{background:var(--field);color:var(--mu);border:1px solid var(--line)}
+.empty{padding:22px 16px;text-align:center;color:var(--mu);font-size:15px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{min-height:40px;padding:6px 14px;border-radius:99px;background:var(--card);border:1px solid var(--line);color:var(--ink);font:500 15px var(--f-body)}
+.chip[aria-pressed="true"]{background:var(--ac);border-color:var(--ac);color:var(--on-ac)}
+.est .chip[aria-pressed="true"][data-v="Malo"]{background:var(--bad);border-color:var(--bad)}
+.est .chip[aria-pressed="true"][data-v="Regular"],.est .chip[aria-pressed="true"][data-v="En reparación"]{background:var(--wa);border-color:var(--wa)}
+.est .chip[aria-pressed="true"][data-v="Bueno"]{background:var(--ok);border-color:var(--ok)}
+.prog{height:10px;border-radius:99px;background:var(--field);border:1px solid var(--line);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:15px}.kv dt{color:var(--mu)}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.foto{width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:var(--field);border:1px solid var(--line)}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--field)}
+.stat b{display:block;font:700 30px/1 var(--f-disp);font-variant-numeric:tabular-nums}
+.stat span{font-size:13.5px;color:var(--mu)}
+.steps{margin:0;padding-left:22px;display:grid;gap:8px;font-size:15px}
+.path{font:600 15px var(--f-disp);letter-spacing:.02em;background:var(--field);border:1px solid var(--line);border-radius:8px;padding:2px 8px;white-space:nowrap}
+nav.bar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+nav.bar .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);height:var(--nav-h)}
+nav.bar button{flex-direction:column;gap:2px;min-height:0;border-radius:0;background:none;color:var(--mu);font:600 13px var(--f-body);padding:6px 2px}
+nav.bar button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav.bar button[aria-current="page"]{color:var(--ac)}
+nav.bar button[aria-current="page"] svg{stroke-width:2.2}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 14px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:500;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.sheet-bar{position:sticky;bottom:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;padding:10px;background:color-mix(in srgb,var(--bg) 85%,transparent);border-radius:16px;backdrop-filter:blur(6px)}
+video{width:100%;border-radius:12px;background:#000;max-height:60vh;object-fit:cover}
+.back{background:none;border:0;color:var(--ac);padding:0;min-height:40px;justify-content:flex-start;font-weight:600}
+.ask{display:grid;gap:10px;border:2px solid var(--tag);border-radius:14px;padding:14px;background:var(--card)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="top"><div class="wrap">
+  <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM15 15h2v2h-2zM18 18h2v2h-2zM18 15h2v2h-2zM15 18h2v2h-2z"/></svg></div>
+  <div class="ttl"><b id="hInst">Inventario en campo</b><span id="hPkg">Sin inventario cargado</span></div>
+  <span class="pend" id="hPend" data-n="0" title="Cambios sin enviar">0</span>
+</div></header>
+
+<main class="wrap">
+  <div id="bnr" hidden></div>
+
+  <!-- Inicio sin paquete -->
+  <section class="view" id="v-inicio" hidden>
+    <h2>Trae el inventario desde el computador</h2>
+    <div class="card">
+      <ol class="steps">
+        <li>En el programa del computador abre la pestaña <b>Celular</b> y pulsa <b>Preparar paquete</b>.</li>
+        <li>Aquí pulsa <b>Cargar paquete</b>, toca <b>Explorar → OneDrive</b> y abre <span class="path">Inventario › celular › inventario-celular.json</span>.</li>
+        <li>Hazlo con señal, antes de salir a la sede. Desde ese momento puedes trabajar sin internet.</li>
+      </ol>
+      <label class="btn b-pri b-big" for="fPkg">Cargar paquete</label>
+      <input type="file" id="fPkg" accept=".json,application/json" hidden>
+      <button class="b-sec" id="bDemo">Ver cómo funciona con datos de ejemplo</button>
+    </div>
+  </section>
+
+  <!-- Buscar / escanear -->
+  <section class="view" id="v-buscar" hidden>
+    <div class="card">
+      <h3>Encuentra el bien</h3>
+      <label class="btn b-pri b-big" for="fQR"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h3v3H8zM13 13h3v3h-3z"/></svg>Tomar foto del código QR</label>
+      <input type="file" id="fQR" accept="image/*" capture="environment" hidden>
+      <button class="b-sec" id="bLive" hidden>Escanear con la cámara en vivo</button>
+      <video id="vid" playsinline muted hidden></video>
+      <div><label class="lb" for="q">O escribe el número de etiqueta, la descripción o el serial</label>
+        <input id="q" type="search" placeholder="Ej: TEC-0012, portátil, PF3K9X21" autocomplete="off" enterkeyhint="search"></div>
+    </div>
+    <div class="list" id="lBuscar"></div>
+  </section>
+
+  <!-- Recorrido por sede -->
+  <section class="view" id="v-sede" hidden>
+    <div class="card">
+      <h3>Recorrido por sede</h3>
+      <div class="g2">
+        <div><label class="lb" for="sSede">Sede</label><select id="sSede"></select></div>
+        <div><label class="lb" for="sEsp">Espacio</label><select id="sEsp"></select></div>
+      </div>
+      <div class="prog" aria-hidden="true"><i id="sBar"></i></div>
+      <p class="sm" id="sTxt"></p>
+      <div class="chips" id="sFil"><button class="chip" data-f="pen" aria-pressed="true">Faltan por verificar</button><button class="chip" data-f="ver" aria-pressed="false">Verificados</button><button class="chip" data-f="all" aria-pressed="false">Todos</button></div>
+    </div>
+    <div class="list" id="lSede"></div>
+  </section>
+
+  <!-- Ficha del bien -->
+  <section class="view" id="v-ficha" hidden>
+    <button class="back" id="fBack">‹ Volver</button>
+    <div class="card" id="fHead"></div>
+    <div class="card">
+      <h3>Estado</h3>
+      <div class="chips est" id="fEst"></div>
+      <p class="sm mu" id="fEstNota" hidden>Este bien está dado de baja. Su estado solo se cambia en el computador.</p>
+    </div>
+    <div class="card">
+      <h3>Ubicación y responsable</h3>
+      <div id="fLoc"></div>
+    </div>
+    <div class="card">
+      <h3>Observaciones y foto</h3>
+      <div><label class="lb" for="fNotas">Observaciones</label><textarea id="fNotas" rows="3" placeholder="Ej: le falta el cargador; tiene rayones en la tapa"></textarea></div>
+      <img id="fFotoV" class="foto" alt="Foto del bien" hidden>
+      <label class="btn b-sec" for="fFoto">Tomar o cambiar foto</label><input type="file" id="fFoto" accept="image/*" capture="environment" hidden>
+    </div>
+    <div class="sheet-bar">
+      <button class="b-ok b-big" id="fVer">✓ Verificado</button>
+      <div class="row"><button class="b-sec" id="fSave">Guardar sin verificar</button><button class="b-dng" id="fUndo" hidden>Deshacer cambios</button></div>
+    </div>
+  </section>
+
+  <!-- Nuevo bien -->
+  <section class="view" id="v-nuevo" hidden>
+    <h2>Registrar un bien nuevo</h2>
+    <p class="mu sm">El número de etiqueta definitivo lo asigna el computador cuando recibe los cambios. Allí podrás imprimir su etiqueta.</p>
+    <div class="card">
+      <div><label class="lb" for="nCat">Categoría *</label><select id="nCat"></select></div>
+      <div><label class="lb" for="nDesc">Descripción *</label><input id="nDesc" maxlength="120" placeholder="Ej: Silla universitaria plástica"></div>
+      <div class="g2"><div><label class="lb" for="nMarca">Marca</label><input id="nMarca" maxlength="60"></div><div><label class="lb" for="nModelo">Modelo</label><input id="nModelo" maxlength="60"></div></div>
+      <div><label class="lb" for="nSerial">Serial</label><input id="nSerial" maxlength="60" autocapitalize="characters"></div>
+      <div id="nLoc"></div>
+      <div><label class="lb">Estado</label><div class="chips est" id="nEst"></div></div>
+      <div><label class="lb" for="nNotas">Observaciones</label><textarea id="nNotas" rows="2"></textarea></div>
+      <img id="nFotoV" class="foto" alt="Foto del bien nuevo" hidden>
+      <label class="btn b-sec" for="nFoto">Tomar foto</label><input type="file" id="nFoto" accept="image/*" capture="environment" hidden>
+      <p class="sm" id="nMsg" role="status"></p>
+      <button class="b-pri b-big" id="nSave">Agregar bien nuevo</button>
+    </div>
+    <h3 id="nListT" hidden>Bienes nuevos en esta visita</h3>
+    <div class="list" id="lNuevo" hidden></div>
+  </section>
+
+  <!-- Enviar -->
+  <section class="view" id="v-enviar" hidden>
+    <h2>Enviar los cambios al computador</h2>
+    <div class="stats" id="eStats"></div>
+    <div class="card">
+      <ol class="steps">
+        <li>Pulsa <b>Guardar archivo de cambios</b>.</li>
+        <li>En el menú del iPhone elige <b>Guardar en Archivos</b>, entra a <b>OneDrive</b> y elige la carpeta <span class="path">Inventario › celular</span>.</li>
+        <li>OneDrive lo sube cuando haya señal. El programa del computador lo detecta solo en la pestaña <b>Celular</b>.</li>
+      </ol>
+      <button class="b-pri b-big" id="eSave">Guardar archivo de cambios</button>
+      <div id="eAsk"></div>
+      <button class="b-sec" id="eLast" hidden>Volver a guardar el último archivo enviado</button>
+    </div>
+    <div class="card">
+      <h3>Inventario en este celular</h3>
+      <p class="sm mu" id="ePkg"></p>
+      <label class="btn b-sec" for="fPkg2">Cargar un paquete más reciente</label><input type="file" id="fPkg2" accept=".json,application/json" hidden>
+      <div id="ePkgAsk"></div>
+    </div>
+  </section>
+</main>
+
+<nav class="bar" aria-label="Secciones"><div class="in">
+  <button data-v="buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>Buscar</button>
+  <button data-v="sede"><svg viewBox="0 0 24 24"><path d="M3 20h18M5 20V9l7-5 7 5v11M10 20v-5h4v5"/></svg>Sede</button>
+  <button data-v="nuevo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo</button>
+  <button data-v="enviar"><svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5"/></svg>Enviar</button>
+</div></nav>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+const hoy=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const fmtD=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'';
+const ICON_QR='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM15 15h2v2h-2zM18 18h2v2h-2z"/></svg>';
+const CAMPOS=['estado','sede','bloque','espacio','responsable','notas'];
+
+/* ---------- almacenamiento en el celular ---------- */
+const S={db:null,mem:{},
+  async open(){try{this.db=await new Promise((res,rej)=>{const r=indexedDB.open('inv_movil',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}catch(e){this.db=null}},
+  async get(k){if(!this.db)return this.mem[k];try{return await new Promise((res,rej)=>{const q=this.db.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}catch(e){return this.mem[k]}},
+  async set(k,v){this.mem[k]=v;if(!this.db){banner();return}try{await new Promise((res,rej)=>{const t=this.db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error)})}catch(e){this.db=null;banner()}}
+};
+let PKG=null,CHG={},NEW=[],LAST=null,BY=new Map(),VIEW='buscar',CUR=null,FED=null,SFIL='pen',DL=null;
+
+function banner(){const b=$('bnr');const msgs=[];
+  if(!S.db)msgs.push('<div class="note wa"><b>Este navegador no está guardando los datos.</b>No cierres esta página hasta enviar los cambios, o se perderán.</div>');
+  if(PKG&&PKG.ejemplo)msgs.push('<div class="note info"><b>Estás viendo datos de ejemplo.</b>Lo que hagas aquí no llega al computador. Cuando quieras empezar, carga tu paquete real en la pestaña Enviar.</div>');
+  b.innerHTML=msgs.join('');b.hidden=!msgs.length}
+const persist=()=>Promise.all([S.set('chg',CHG),S.set('new',NEW)]);
+let tT=0;function toast(t){const e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(tT);tT=setTimeout(()=>e.hidden=true,2600)}
+
+/* ---------- índice del paquete ---------- */
+const keyOf=c=>{const s=String(c||'').trim().toUpperCase(),m=s.match(/^([A-Z0-9]+)-0*(\d+)$/);return m?m[1]+'-'+parseInt(m[2],10):s};
+function index(){BY=new Map();(PKG?PKG.items:[]).forEach(i=>BY.set(keyOf(i.codigo),i))}
+const cur=i=>{const c=CHG[i.codigo];return c?{...i,...c.campos,thumb:c.thumb||i.thumb}:i};
+const verHoy=i=>!!(CHG[i.codigo]&&CHG[i.codigo].verificado);
+const ESTS=()=>(PKG&&PKG.estados)||['Bueno','Regular','Malo','En reparación','De baja'];
+const sedes=()=>(PKG&&PKG.esp&&PKG.esp.sedes)||[];
+const findSede=n=>sedes().find(s=>s.n===n);
+const espTxt=(se,b,e)=>{const S_=findSede(se),B=S_&&S_.b.find(x=>x.c===b),E=B&&B.e.find(x=>x.c===e);return e?(b?b+' - ':'')+e+(E&&E.u?' · '+E.u:''):''};
+const ubic=i=>[i.sede,espTxt(i.sede,i.bloque,i.espacio)].filter(Boolean).join(' › ');
+const catN=k=>(PKG&&PKG.cats&&PKG.cats[k])||k;
+
+/* ---------- cabecera y navegación ---------- */
+function head(){
+  $('hInst').textContent=PKG?(PKG.inst||'Inventario en campo'):'Inventario en campo';
+  $('hPkg').textContent=PKG?(PKG.ejemplo?'Ejemplo · ':'')+PKG.items.length+' bienes · paquete del '+fmtD(PKG.generado):'Sin inventario cargado';
+  const n=Object.keys(CHG).length+NEW.length;$('hPend').textContent=n;$('hPend').dataset.n=n;$('hPend').title=n+(n===1?' cambio sin enviar':' cambios sin enviar');
+  banner();
+}
+function go(v){
+  if(!PKG)v='inicio';
+  VIEW=v;['inicio','buscar','sede','ficha','nuevo','enviar'].forEach(x=>$('v-'+x).hidden=x!==v);
+  document.querySelectorAll('nav.bar button').forEach(b=>b.setAttribute('aria-current',b.dataset.v===v||(v==='ficha'&&b.dataset.v===FROM)?'page':'false'));
+  document.querySelector('nav.bar').hidden=!PKG;
+  if(v!=='buscar')stopLive();
+  if(v==='buscar')renderBuscar();if(v==='sede')renderSede();if(v==='nuevo')renderNuevo();if(v==='enviar')renderEnviar();
+  head();scrollTo(0,0);
+}
+let FROM='buscar';
+document.querySelector('nav.bar').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(b)go(b.dataset.v)});
+
+/* ---------- filas de lista ---------- */
+function fila(i){const c=cur(i),ch=CHG[i.codigo],t=c.thumb?'<img class="th" src="'+esc(c.thumb)+'" alt="">':'<span class="th">'+esc(i.categoria)+'</span>';
+  const st=verHoy(i)?'<span class="st v">Verificado</span>':ch?'<span class="st c">Con cambios</span>':'<span class="st p">Pendiente</span>';
+  return '<button class="it" data-c="'+esc(i.codigo)+'">'+t+'<span class="tx"><b>'+esc(c.descripcion||'(sin descripción)')+'</b><span>'+esc(i.codigo)+' · '+esc(c.estado||'')+(ubic(c)?' · '+esc(ubic(c)):'')+'</span></span>'+st+'</button>'}
+function bindList(el){el.onclick=e=>{const b=e.target.closest('.it[data-c]');if(b)openFicha(b.dataset.c)}}
+
+/* ---------- buscar ---------- */
+function renderBuscar(){
+  const q=norm($('q').value),L=$('lBuscar');
+  if(!q){const rec=Object.keys(CHG).slice(-8).reverse().map(c=>BY.get(keyOf(c))).filter(Boolean);
+    L.innerHTML=rec.length?'<div class="empty" style="text-align:left;padding:12px 14px 4px">Últimos que revisaste</div>'+rec.map(fila).join(''):'<div class="empty">Toma una foto del QR de la etiqueta o escribe para buscar.</div>';return}
+  const w=q.split(/\s+/),r=PKG.items.filter(i=>{const t=norm([i.codigo,i.descripcion,i.marca,i.modelo,i.serial,i.sede,i.espacio,i.responsable,i.autor].join(' '));return w.every(x=>t.includes(x))}).slice(0,60);
+  L.innerHTML=r.length?r.map(fila).join(''):'<div class="empty">No hay bienes que coincidan con «'+esc($('q').value)+'».</div>';
+}
+$('q').addEventListener('input',renderBuscar);
+$('q').addEventListener('keydown',e=>{if(e.key==='Enter'){const i=BY.get(keyOf($('q').value));if(i){$('q').blur();openFicha(i.codigo)}}});
+bindList($('lBuscar'));
+
+/* ---------- QR ---------- */
+const loadImg=f=>new Promise((res,rej)=>{const u=URL.createObjectURL(f),im=new Image();im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('img'))};im.src=u});
+function decode(src,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(src,0,0,w,h);const d=x.getImageData(0,0,w,h);const r=typeof jsQR==='function'?jsQR(d.data,w,h,{inversionAttempts:'attemptBoth'}):null;return r&&r.data?r.data.trim():null}
+function hallado(txt){
+  const i=BY.get(keyOf(txt))||BY.get(keyOf(String(txt).split(/[\/?#=]/).pop()));
+  if(i){openFicha(i.codigo);toast('Encontrado: '+i.codigo)}else{$('q').value=txt;renderBuscar();toast('El código «'+txt+'» no está en el paquete')}
+}
+$('fQR').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(typeof jsQR!=='function'){toast('No cargó el lector de QR. Escribe el código.');return}
+  try{const im=await loadImg(f);let r=null;for(const mx of [1200,800,1800]){const s=Math.min(1,mx/Math.max(im.naturalWidth,im.naturalHeight));r=decode(im,Math.round(im.naturalWidth*s),Math.round(im.naturalHeight*s));if(r)break}
+    if(r)hallado(r);else toast('No se leyó el QR. Acércate más, con buena luz, o escribe el código.')}
+  catch(x){toast('No se pudo abrir la foto.')}};
+let stream=null,raf=0;
+function stopLive(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}cancelAnimationFrame(raf);$('vid').hidden=true;$('bLive').textContent='Escanear con la cámara en vivo'}
+$('bLive').onclick=async()=>{if(stream){stopLive();return}
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})}catch(e){$('bLive').hidden=true;toast('La cámara en vivo no está disponible. Usa la foto del QR.');return}
+  const v=$('vid');v.srcObject=stream;v.hidden=false;await v.play().catch(()=>{});$('bLive').textContent='Detener cámara';
+  const loop=()=>{if(!stream)return;if(v.videoWidth){const s=Math.min(1,640/v.videoWidth),r=decode(v,Math.round(v.videoWidth*s),Math.round(v.videoHeight*s));if(r){stopLive();hallado(r);return}}raf=requestAnimationFrame(loop)};loop()};
+
+/* ---------- selector de ubicación ---------- */
+function locUI(box,pre,val){
+  const sel=(id,lbl,opts,v)=>'<div><label class="lb" for="'+pre+id+'">'+lbl+'</label><select id="'+pre+id+'">'+opts.map(([k,t])=>'<option value="'+esc(k)+'"'+(k===v?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></div>';
+  const draw=()=>{const S_=findSede(val.sede),B=S_&&S_.b.find(x=>x.c===val.bloque);
+    let so=[['','(sin sede)'],...sedes().map(s=>[s.n,s.n])];if(val.sede&&!S_)so.push([val.sede,val.sede]);
+    let bo=[['','(sin bloque)'],...(S_?S_.b.map(b=>[b.c,b.c+(b.n?' · '+b.n:'')]):[])];if(val.bloque&&!(B))bo.push([val.bloque,val.bloque]);
+    let eo=[['','(sin espacio)'],...(B?B.e.map(e=>[e.c,e.c+(e.d?' · '+e.d:'')+(e.u?' · '+e.u:'')]):[])];if(val.espacio&&!(B&&B.e.some(x=>x.c===val.espacio)))eo.push([val.espacio,val.espacio]);
+    const rl=S_&&S_.r&&S_.r.length?S_.r:null;
+    box.innerHTML='<div class="g2">'+sel('Sede','Sede',so,val.sede||'')+sel('Bloque','Bloque',bo,val.bloque||'')+'</div>'+sel('Esp','Espacio',eo,val.espacio||'')+
+      (rl?sel('Resp','Responsable',[['','(sin responsable)'],...rl.map(r=>[r.n,r.n+(r.c?' · '+r.c:'')]),...(val.responsable&&!rl.some(r=>r.n===val.responsable)?[[val.responsable,val.responsable]]:[])],val.responsable||'')
+         :'<div><label class="lb" for="'+pre+'Resp">Responsable</label><input id="'+pre+'Resp" value="'+esc(val.responsable||'')+'" maxlength="80"></div>');
+    box.style.display='grid';box.style.gap='10px';
+    $(pre+'Sede').onchange=e=>{val.sede=e.target.value;val.bloque='';val.espacio='';draw()};
+    $(pre+'Bloque').onchange=e=>{val.bloque=e.target.value;val.espacio='';draw()};
+    $(pre+'Esp').onchange=e=>{val.espacio=e.target.value};
+    $(pre+'Resp').onchange=$(pre+'Resp').oninput=e=>{val.responsable=e.target.value};
+  };draw();return val}
+function estUI(box,v,dis){const opts=ESTS().filter(e=>e!=='De baja');box.innerHTML=opts.map(e=>'<button class="chip" data-v="'+esc(e)+'" aria-pressed="'+(e===v.estado)+'"'+(dis?' disabled':'')+'>'+esc(e)+'</button>').join('');
+  box.onclick=e=>{const b=e.target.closest('.chip');if(!b||dis)return;v.estado=b.dataset.v;box.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b))}}
+
+/* ---------- fotos ---------- */
+async function shrink(f,max,q){const im=await loadImg(f),s=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.naturalWidth*s));c.height=Math.max(1,Math.round(im.naturalHeight*s));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/jpeg',q)}
+const fotoPar=async f=>({foto:await shrink(f,1280,.8),thumb:await shrink(f,96,.6)});
+
+/* ---------- ficha ---------- */
+function openFicha(code){
+  const i=BY.get(keyOf(code));if(!i)return;CUR=i;if(VIEW!=='ficha')FROM=VIEW==='sede'?'sede':'buscar';
+  const c=cur(i),ch=CHG[i.codigo];FED={estado:c.estado||'Bueno',sede:c.sede||'',bloque:c.bloque||'',espacio:c.espacio||'',responsable:c.responsable||'',notas:c.notas||'',foto:null,thumb:null};
+  const baja=i.estado==='De baja';
+  $('fHead').innerHTML='<div class="row" style="justify-content:space-between"><span class="placa" style="flex:none">'+ICON_QR+esc(i.codigo)+'</span><span class="mu sm" style="flex:none">'+esc(catN(i.categoria))+'</span></div>'+
+    '<h2>'+esc(i.descripcion||'(sin descripción)')+'</h2>'+
+    '<dl class="kv">'+[['Marca',i.marca],['Modelo',i.modelo],['Serial',i.serial],['Autor',i.autor],['Signatura',i.signatura],['Última verificación',i.verificado?fmtD(i.verificado):'Nunca']].filter(x=>x[1]&&x[1]!=='N/A').map(x=>'<dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd>').join('')+'</dl>'+
+    (verHoy(i)?'<div class="note ok"><b>Verificado en esta visita</b></div>':'')+
+    (ch&&Object.keys(ch.campos).length?'<div class="note wa"><b>Cambios guardados en este celular:</b>'+Object.keys(ch.campos).map(k=>esc(k)+': '+esc(ch.antes[k]||'—')+' → '+esc(ch.campos[k]||'—')).join('<br>')+'</div>':'');
+  estUI($('fEst'),FED,baja);$('fEstNota').hidden=!baja;
+  locUI($('fLoc'),'fl',FED);
+  $('fNotas').value=FED.notas;
+  const th=(ch&&ch.thumb)||i.thumb,v=$('fFotoV');v.src=(ch&&ch.foto)||th||'';v.hidden=!v.getAttribute('src');
+  $('fVer').textContent=verHoy(i)?'Guardar (ya está verificado)':'✓ Verificado';
+  $('fUndo').hidden=!ch;
+  go('ficha');
+}
+$('fNotas').oninput=e=>{if(FED)FED.notas=e.target.value};
+$('fFoto').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||!FED)return;try{Object.assign(FED,await fotoPar(f));$('fFotoV').src=FED.foto;$('fFotoV').hidden=false;toast('Foto lista. Se guarda al pulsar un botón de abajo.')}catch(x){toast('No se pudo leer la foto.')}};
+function guardaFicha(verificar){
+  const i=CUR;if(!i)return;const ch=CHG[i.codigo]||{codigo:i.codigo,campos:{},antes:{}};
+  CAMPOS.forEach(k=>{if(k==='estado'&&i.estado==='De baja')return;const nv=String(FED[k]||''),ov=String(i[k]||'');
+    if(nv!==ov){if(!(k in ch.antes))ch.antes[k]=ov;ch.campos[k]=nv}else{delete ch.campos[k];delete ch.antes[k]}});
+  if(FED.foto){ch.foto=FED.foto;ch.thumb=FED.thumb}
+  if(verificar)ch.verificado=hoy();
+  ch.t=new Date().toISOString();
+  if(!ch.verificado&&!ch.foto&&!Object.keys(ch.campos).length)delete CHG[i.codigo];else CHG[i.codigo]=ch;
+  persist();head();
+}
+$('fVer').onclick=()=>{guardaFicha(true);toast(CUR.codigo+' verificado');$('q').value='';go(FROM)};
+$('fSave').onclick=()=>{guardaFicha(false);toast('Cambios guardados en el celular');go(FROM)};
+$('fUndo').onclick=()=>{if($('fUndo').dataset.arm!=='1'){$('fUndo').dataset.arm='1';$('fUndo').textContent='Toca otra vez para deshacer';setTimeout(()=>{$('fUndo').dataset.arm='';$('fUndo').textContent='Deshacer cambios'},3000);return}
+  $('fUndo').dataset.arm='';$('fUndo').textContent='Deshacer cambios';delete CHG[CUR.codigo];persist();toast('Se deshicieron los cambios de '+CUR.codigo);openFicha(CUR.codigo)};
+$('fBack').onclick=()=>go(FROM);
+
+/* ---------- recorrido por sede ---------- */
+let SS=null;
+function renderSede(){
+  const list=PKG.items.filter(i=>i.estado!=='De baja');
+  const sn=[...new Set([...sedes().map(s=>s.n),...list.map(i=>cur(i).sede).filter(Boolean)])];
+  if(SS===null)SS={sede:sn[0]||'',esp:''};
+  $('sSede').innerHTML=sn.map(n=>'<option'+(n===SS.sede?' selected':'')+'>'+esc(n)+'</option>').join('')+'<option value=""'+(SS.sede===''?' selected':'')+'>(sin sede)</option>';
+  const enS=list.filter(i=>(cur(i).sede||'')===SS.sede);
+  const es=[...new Map(enS.map(i=>{const c=cur(i);return [c.bloque+'|'+c.espacio,espTxt(c.sede,c.bloque,c.espacio)||'(sin espacio)']})).entries()].sort((a,b)=>a[1].localeCompare(b[1],'es',{numeric:true}));
+  if(SS.esp&&!es.some(x=>x[0]===SS.esp))SS.esp='';
+  $('sEsp').innerHTML='<option value="">Todos los espacios</option>'+es.map(([k,t])=>'<option value="'+esc(k)+'"'+(k===SS.esp?' selected':'')+'>'+esc(t)+'</option>').join('');
+  const L=enS.filter(i=>{const c=cur(i);return !SS.esp||(c.bloque+'|'+c.espacio)===SS.esp}).sort((a,b)=>{const x=cur(a),y=cur(b);return (x.bloque+x.espacio).localeCompare(y.bloque+y.espacio,'es',{numeric:true})||a.codigo.localeCompare(b.codigo,'es',{numeric:true})});
+  const nv=L.filter(verHoy).length;$('sBar').style.width=(L.length?nv*100/L.length:0)+'%';
+  $('sTxt').innerHTML='<b>'+nv+' de '+L.length+'</b> verificados en esta visita'+(L.length-nv?' · faltan '+(L.length-nv):'');
+  document.querySelectorAll('#sFil .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.f===SFIL));
+  const V=L.filter(i=>SFIL==='all'||(SFIL==='ver')===verHoy(i));
+  $('lSede').innerHTML=V.length?V.map(fila).join(''):'<div class="empty">'+(SFIL==='pen'&&L.length?'Ya verificaste todos los bienes de este lugar.':'No hay bienes en esta vista.')+'</div>';
+}
+$('sSede').onchange=e=>{SS={sede:e.target.value,esp:''};renderSede()};
+$('sEsp').onchange=e=>{SS.esp=e.target.value;renderSede()};
+$('sFil').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;SFIL=b.dataset.f;renderSede()};
+bindList($('lSede'));
+
+/* ---------- bienes nuevos ---------- */
+let NV=null;
+function renderNuevo(){
+  if(!NV){const last=NEW[NEW.length-1];NV={estado:'Bueno',sede:last?last.sede:(SS&&SS.sede)||'',bloque:last?last.bloque:'',espacio:last?last.espacio:'',responsable:last?last.responsable:'',foto:null,thumb:null}}
+  const cats=Object.entries(PKG.cats||{}).filter(([k])=>k!==PKG.bib);const cv=$('nCat').value;
+  $('nCat').innerHTML='<option value="">Elige la categoría…</option>'+cats.map(([k,n])=>'<option value="'+esc(k)+'"'+(k===cv?' selected':'')+'>'+esc(k)+' · '+esc(n)+'</option>').join('');
+  locUI($('nLoc'),'nl',NV);estUI($('nEst'),NV,false);
+  $('nFotoV').hidden=!NV.foto;if(NV.foto)$('nFotoV').src=NV.foto;
+  $('nListT').hidden=$('lNuevo').hidden=!NEW.length;
+  $('lNuevo').innerHTML=NEW.map((n,k)=>'<div class="it" style="grid-template-columns:44px 1fr auto">'+(n.thumb?'<img class="th" src="'+esc(n.thumb)+'" alt="">':'<span class="th">'+esc(n.categoria)+'</span>')+'<span class="tx"><b>'+esc(n.descripcion)+'</b><span><span class="placa nuevo" style="font-size:13px;padding:2px 6px">'+esc(n.tmp)+'</span> '+esc(n.estado)+(ubic(n)?' · '+esc(ubic(n)):'')+'</span></span><button class="b-dng" data-del="'+k+'" style="min-height:40px;padding:6px 12px">Quitar</button></div>').join('');
+}
+$('nFoto').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||!NV)return;try{Object.assign(NV,await fotoPar(f));$('nFotoV').src=NV.foto;$('nFotoV').hidden=false}catch(x){toast('No se pudo leer la foto.')}};
+$('nSave').onclick=()=>{
+  const cat=$('nCat').value,d=$('nDesc').value.trim();
+  if(!cat||!d){$('nMsg').textContent='Falta '+(!cat?'la categoría':'la descripción')+'.';$('nMsg').className='sm';$('nMsg').style.color='var(--bad)';return}
+  const n=(NEW.reduce((m,x)=>Math.max(m,parseInt(String(x.tmp).replace(/\D/g,''),10)||0),0))+1;
+  NEW.push({tmp:'NUEVO-'+n,categoria:cat,descripcion:d,marca:$('nMarca').value.trim(),modelo:$('nModelo').value.trim(),serial:$('nSerial').value.trim(),
+    sede:NV.sede,bloque:NV.bloque,espacio:NV.espacio,responsable:NV.responsable,estado:NV.estado,notas:$('nNotas').value.trim(),fecha:hoy(),foto:NV.foto,thumb:NV.thumb});
+  persist();['nDesc','nMarca','nModelo','nSerial','nNotas'].forEach(id=>$(id).value='');NV={...NV,foto:null,thumb:null};
+  $('nMsg').textContent='Se agregó «'+d+'» como NUEVO-'+n+'.';$('nMsg').style.color='var(--ok)';renderNuevo();head();
+};
+$('lNuevo').onclick=e=>{const b=e.target.closest('[data-del]');if(!b)return;if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='¿Quitar?';setTimeout(()=>{if(b.isConnected){b.dataset.arm='';b.textContent='Quitar'}},3000);return}
+  NEW.splice(+b.dataset.del,1);persist();renderNuevo();head();toast('Bien nuevo quitado')};
+
+/* ---------- enviar ---------- */
+function resumen(){const v=Object.values(CHG);return {ver:v.filter(c=>c.verificado).length,cam:v.filter(c=>Object.keys(c.campos).length).length,fot:v.filter(c=>c.foto).length+NEW.filter(n=>n.foto).length,nue:NEW.length}}
+function renderEnviar(){
+  const r=resumen(),tot=Object.keys(CHG).length+NEW.length;
+  $('eStats').innerHTML=[[r.ver,'bienes verificados'],[r.cam,'con cambios de estado o ubicación'],[r.nue,'bienes nuevos'],[r.fot,'fotos']].map(([n,t])=>'<div class="stat"><b>'+n+'</b><span>'+t+'</span></div>').join('');
+  $('eSave').disabled=!tot;$('eSave').textContent=tot?'Guardar archivo de cambios':'No hay cambios por enviar';
+  $('eLast').hidden=!LAST;
+  $('ePkg').textContent=PKG.ejemplo?'Datos de ejemplo. Carga aquí el paquete real que preparó el computador.':PKG.items.length+' bienes, paquete preparado el '+fmtD(PKG.generado)+'. Carga uno nuevo después de que el computador reciba tus cambios.';
+}
+async function entregar(name,txt){
+  if(DL){await DL.save({filename:name,data:txt});return true}
+  const file=new File([txt],name,{type:'application/json'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:name});return true}catch(e){if(e.name==='AbortError')return false;throw e}}
+  const a=document.createElement('a'),u=URL.createObjectURL(file);a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);return true;
+}
+$('eSave').onclick=async()=>{
+  const d=new Date(),st=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+  const id='C'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const data={app:'inventario-cambios',v:1,id,paquete:PKG.id||'',ejemplo:!!PKG.ejemplo,generado:d.toISOString(),resumen:resumen(),cambios:Object.values(CHG),nuevos:NEW};
+  const name='cambios-'+st+'.json',txt=JSON.stringify(data);
+  try{if(!(await entregar(name,txt)))return}
+  catch(e){toast(e&&e.code==='declined'?'No se guardó el archivo.':'No se pudo guardar el archivo'+(e&&e.message?': '+e.message:'')+'.');return}
+  $('eAsk').innerHTML='<div class="ask"><b>¿Quedó guardado en OneDrive › Inventario › celular?</b><p class="sm mu">Si respondes que sí, el celular marca estos cambios como enviados y los quita de la lista de pendientes. El archivo queda guardado por si necesitas enviarlo otra vez.</p><div class="row"><button class="b-ok" id="eYes">Sí, ya quedó</button><button class="b-sec" id="eNo">Todavía no</button></div></div>';
+  $('eNo').onclick=()=>{$('eAsk').innerHTML=''};
+  $('eYes').onclick=async()=>{
+    PKG.items.forEach(i=>{const c=CHG[i.codigo];if(!c)return;Object.assign(i,c.campos);if(c.verificado)i.verificado=c.verificado;if(c.thumb)i.thumb=c.thumb});
+    LAST={name,txt};CHG={};NEW=[];NV=null;await Promise.all([S.set('pkg',PKG),S.set('last',LAST),persist()]);
+    $('eAsk').innerHTML='';toast('Cambios marcados como enviados');renderEnviar();head();
+  };
+};
+$('eLast').onclick=async()=>{if(!LAST)return;try{await entregar(LAST.name,LAST.txt)}catch(e){toast('No se pudo guardar el archivo.')}};
+
+/* ---------- cargar paquete ---------- */
+async function leePaquete(f){let d;try{d=JSON.parse(await f.text())}catch(e){toast('Ese archivo no es un paquete del inventario.');return null}
+  if(!d||d.app!=='inventario-movil'||!Array.isArray(d.items)){toast(d&&d.app==='inventario-cambios'?'Ese es un archivo de cambios. Aquí va inventario-celular.json.':'Ese archivo no es un paquete del inventario.');return null}return d}
+async function usaPaquete(d){PKG=d;index();SS=null;NV=null;CUR=null;await S.set('pkg',PKG);toast(d.ejemplo?'Datos de ejemplo cargados':'Inventario cargado: '+d.items.length+' bienes');go('buscar')}
+$('fPkg').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const d=await leePaquete(f);if(d)usaPaquete(d)};
+$('fPkg2').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const d=await leePaquete(f);if(!d)return;
+  const n=Object.keys(CHG).length+NEW.length;if(!n||PKG.ejemplo){CHG={};NEW=[];await persist();usaPaquete(d);return}
+  $('ePkgAsk').innerHTML='<div class="ask"><b>Tienes '+n+' cambios sin enviar.</b><p class="sm">Envíalos primero. Si cargas el paquete nuevo ahora, esos cambios se pierden.</p><div class="row"><button class="b-dng" id="pYes">Descartar cambios y cargar</button><button class="b-sec" id="pNo">Cancelar</button></div></div>';
+  $('pNo').onclick=()=>{$('ePkgAsk').innerHTML=''};$('pYes').onclick=async()=>{$('ePkgAsk').innerHTML='';CHG={};NEW=[];await persist();usaPaquete(d)}};
+
+/* ---------- ejemplo ---------- */
+$('bDemo').onclick=()=>{
+  const esp={sedes:[{n:'SEDE PRINCIPAL',b:[{c:'BLQ1',n:'BLOQUE 1',e:[{c:'A101',d:'AULA 101',u:'GRADO 901'},{c:'A102',d:'AULA 102',u:'GRADO 902'},{c:'SIS1',d:'SALA DE SISTEMAS',u:''}]}],r:[]},{n:'SEDE RURAL EL CARMEN',b:[{c:'BLQ1',n:'BLOQUE ÚNICO',e:[{c:'A1',d:'AULA MULTIGRADO',u:'PRIMARIA'},{c:'BDG',d:'BODEGA',u:''}]}],r:[]}]};
+  const R=(c,k,d,m,o,s,se,b,e,st,v)=>({codigo:c,categoria:k,descripcion:d,marca:m,modelo:o,serial:s,sede:se,bloque:b,espacio:e,responsable:'',estado:st,verificado:v,notas:''});
+  const items=[R('TEC-0001','TEC','Computador portátil docente','Lenovo','ThinkPad E14','PF3K9X21','SEDE PRINCIPAL','BLQ1','SIS1','Bueno','2026-03-10'),R('TEC-0002','TEC','Proyector de aula','Epson','X49','VNBF123456','SEDE PRINCIPAL','BLQ1','A101','Regular',''),
+    R('TEC-0003','TEC','Tableta estudiantil','Samsung','Tab A8','R9KT20AB','SEDE RURAL EL CARMEN','BLQ1','A1','Bueno','2025-11-02'),R('TEC-0004','TEC','Computador de escritorio','HP','ProDesk 400','MXL1234XYZ','SEDE PRINCIPAL','BLQ1','SIS1','Malo',''),
+    R('MOB-0001','MOB','Escritorio docente','N/A','N/A','N/A','SEDE PRINCIPAL','BLQ1','A101','Bueno',''),R('MOB-0002','MOB','Silla universitaria','N/A','N/A','N/A','SEDE PRINCIPAL','BLQ1','A102','Bueno',''),
+    R('MOB-0003','MOB','Tablero acrílico','N/A','N/A','N/A','SEDE RURAL EL CARMEN','BLQ1','A1','Regular',''),R('MOB-0004','MOB','Estante metálico','N/A','N/A','N/A','SEDE RURAL EL CARMEN','BLQ1','BDG','Bueno',''),
+    R('AUD-0001','AUD','Microscopio óptico','Motic','BA81','MC88812','SEDE PRINCIPAL','BLQ1','A102','En reparación',''),R('OTR-0001','OTR','Botiquín de primeros auxilios','','','','SEDE RURAL EL CARMEN','BLQ1','BDG','Bueno','')];
+  usaPaquete({app:'inventario-movil',v:1,id:'EJEMPLO',ejemplo:true,generado:new Date().toISOString(),inst:'Institución Educativa (ejemplo)',cats:{TEC:'Tecnología',MOB:'Mobiliario',AUD:'Audiovisual / Laboratorio',OTR:'Otros'},bib:'BIB',estados:['Bueno','Regular','Malo','En reparación','De baja'],esp,items});
+};
+
+/* ---------- arranque ---------- */
+(async()=>{
+  await S.open();
+  try{PKG=await S.get('pkg')||null;CHG=await S.get('chg')||{};NEW=await S.get('new')||[];LAST=await S.get('last')||null}catch(e){}
+  index();go(PKG?'buscar':'inicio');
+  if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&!window.claude)$('bLive').hidden=false;
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  if(window.claude&&window.claude.use){try{DL=await window.claude.use('downloads')}catch(e){DL=null}}
+})();
+})();
+</script>
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});</script>
+</body></html>
